@@ -39,7 +39,7 @@ python enhance.py images/night.jpg images/day.jpg --method wiener --output PATH
 
 ## Options
 
-### Wiener (recommended)
+### Wiener 
 ```bash
 python enhance.py night.png day.png --method wiener \
   --rows 737 \        # grid rows (default: image height)
