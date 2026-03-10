@@ -6,33 +6,25 @@ CLI tool for experimenting with multiple classical enhancement methods.
 
 USAGE
 -----
-  python enhance.py night.png day.png [OPTIONS]
+  python enhance.py images/night.jpg images/day.jpg [OPTIONS]
 
 METHODS (--method)
 ------------------
   wiener       Spatially-adaptive Wiener estimator (default, best result)
-               G&W §5.8 "Minimum Mean Square Error (Wiener) Filtering"
 
   gamma        Power-law (gamma) intensity transformation
-               G&W §3.2 "Power-Law (Gamma) Transformations"
 
   clahe        Contrast Limited Adaptive Histogram Equalization
-               G&W §3.3 "Histogram Equalization / Local Histogram Processing"
 
   retinex      Multi-Scale Retinex with Color Restoration (MSRCR)
-               G&W §3.4 (spatial filtering); based on Land 1977 Retinex theory
 
   linear       Global per-channel affine stretch (match means and stds)
-               G&W §3.2 "Linear Transformations"
 
   regional     Sky/building region-aware affine stretch using spatial prior
-               G&W §10.3 "Thresholding" + §9.2 "Erosion and Dilation"
 
   poly         Polynomial tone-curve correction fitted on sorted pixel pairs
-               G&W §3.2 "Some Basic Intensity Transformation Functions"
 
   hist_match   Histogram matching (specification) to day reference
-               G&W §3.3 "Histogram Matching (Specification)"
 
 EXAMPLES
 --------
@@ -72,12 +64,11 @@ import numpy as np
 from skimage.metrics import structural_similarity as ssim
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 # Metrics
-# ─────────────────────────────────────────────────────────────────────────────
 
 def compute_mse(a, b):
-    """Per-channel and average MSE. G&W §2.6 (distance measures)."""
+    """Per-channel and average MSE."""
     a, b = a.astype(np.float64), b.astype(np.float64)
     mb = np.mean((a[:,:,0]-b[:,:,0])**2)
     mg = np.mean((a[:,:,1]-b[:,:,1])**2)
@@ -89,32 +80,11 @@ def compute_ssim(a, b):
     return ssim(a, b, channel_axis=2, data_range=255)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Method 1: Wiener (best)
-# G&W §5.8 — Minimum Mean Square Error (Wiener) Filtering
-# ─────────────────────────────────────────────────────────────────────────────
 
 def method_wiener(night, day, rows=None, cols=256, denoise_h=10):
     """
     Spatially-adaptive Wiener estimator with bilinearly interpolated parameters.
-
-    For each tile (i,j) in an n_rows x n_cols grid, compute the MMSE linear
-    estimator of the day pixel value given the night pixel value (G&W §5.8):
-
-        out(x) = μ_day + α * (night(x) - μ_night)
-        α = max(0, Cov(night, day) / Var(night))
-
-    α is the Wiener coefficient: the ratio of cross-covariance to signal
-    variance. When α≈0 (dark, uncorrelated tile) the output equals the day
-    mean — the optimal prediction when night carries no information.
-    When α>0 the night structure is preserved and scaled appropriately.
-
-    Parameters (α, μ_day, μ_night) are bilinearly interpolated to full
-    resolution before applying the transform, eliminating tile seam artifacts.
-
-    Reference: Gonzalez & Woods, Digital Image Processing 4e, §5.8,
-               equation: Ŝ(u,v) = H*(u,v) / (|H|² + Sn/Sf) · G(u,v)
-               Spatial analog with per-patch covariance estimation.
     """
     H, W = night.shape[:2]
     if rows is None:
@@ -157,23 +127,13 @@ def method_wiener(night, day, rows=None, cols=256, denoise_h=10):
     return out
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 # Method 2: Gamma correction
-# G&W §3.2 — Power-Law (Gamma) Transformations
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def method_gamma(night, day, gamma=0.4, denoise_h=0):
     """
-    Power-law intensity transformation: s = c * r^γ   (G&W §3.2, Eq. 3-2).
-
-    γ < 1 expands the dark end of the intensity scale, compressing highlights.
-    Applied per-channel so each channel is independently gamma-corrected.
-    This is the simplest classical enhancement for underexposed images.
-
-    Limitation: amplifies noise uniformly, has no color correction, and
-    cannot correct the severe sodium-light color cast in night imagery.
-
-    Reference: G&W §3.2, "Power-Law (Gamma) Transformations".
+    Power-law intensity transformation: s = c * r^γ.
     """
     n = night.astype(np.float32) / 255.0
     out = np.power(np.clip(n, 0, 1), gamma)
@@ -185,26 +145,13 @@ def method_gamma(night, day, gamma=0.4, denoise_h=0):
     return out
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 # Method 3: CLAHE
-# G&W §3.3 — Local Histogram Processing / Contrast-Limited AHE
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def method_clahe(night, day, clip_limit=2.0, tile_grid=8, denoise_h=0):
     """
     Contrast Limited Adaptive Histogram Equalization (CLAHE).
-
-    Standard histogram equalization (G&W §3.3) maps the global CDF to uniform,
-    which over-amplifies noise in large flat regions. CLAHE applies equalization
-    locally on a grid of tiles (size tile_grid x tile_grid) and clips the
-    histogram at clip_limit to prevent noise amplification.
-
-    Applied in LAB color space: equalization on the L channel only, preserving
-    the color ratio between A and B channels. This avoids the color saturation
-    artifacts that occur when equalizing RGB channels independently.
-
-    Reference: G&W §3.3, "Local Histogram Processing"; clip-limit concept
-               from Zuiderveld 1994 (CLAHE original paper).
     """
     # Convert to LAB, equalize L only
     lab = cv2.cvtColor(night, cv2.COLOR_BGR2LAB)
@@ -219,27 +166,13 @@ def method_clahe(night, day, clip_limit=2.0, tile_grid=8, denoise_h=0):
     return out
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 # Method 4: Multi-Scale Retinex with Color Restoration (MSRCR)
-# G&W §3.4 (Gaussian spatial filtering); Retinex: Land 1977
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def method_retinex(night, day, sigmas=(15, 80, 250), denoise_h=8):
     """
     Multi-Scale Retinex with Color Restoration (MSRCR).
-
-    Retinex theory (Land 1977) models image I = R * L (reflectance * illumination).
-    Log-domain subtraction recovers reflectance: log R = log I - log L,
-    where L is estimated by Gaussian smoothing of log I at multiple scales.
-    MSRCR averages over scales σ∈{15,80,250} and applies color restoration
-    to reduce the grey-world desaturation artifact.
-
-    Known failure mode on near-black images: when I≈0, log(I)→-∞ causing
-    numerical explosion in dark regions. I add a small offset (1.0) before
-    taking logs to prevent this, but this biases the estimate in dark areas.
-
-    Reference: G&W §3.4 (Gaussian filtering as illumination estimator);
-               Jobson, Rahman & Woodell (1997) MSRCR paper.
     """
     img = night.astype(np.float32) + 1.0  # avoid log(0)
     log_img = np.log(img)
@@ -273,27 +206,13 @@ def method_retinex(night, day, sigmas=(15, 80, 250), denoise_h=8):
     return out
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 # Method 5: Global linear stretch
-# G&W §3.2 — Linear (Identity) Transformations / affine mapping
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def method_linear(night, day, denoise_h=10):
     """
     Global per-channel affine stretch: match night mean/std to day mean/std.
-
-        out_c = (night_c - μ_night_c) / σ_night_c * σ_day_c + μ_day_c
-
-    This is the globally optimal affine estimator of day from night
-    (i.e., Wiener with a single global tile covering the whole image).
-    Equivalent to global histogram standardization (G&W §3.3).
-
-    Limitation: one set of statistics for the entire image cannot capture
-    the very different lighting between sky (dark blue night) vs buildings
-    (warm sodium-lit), causing color artifacts at region boundaries.
-
-    Reference: G&W §3.2, linear intensity transformations; §3.3 histogram
-               statistics (mean, variance) as descriptors.
     """
     result = np.zeros_like(night, dtype=np.float32)
     for c in range(3):
@@ -308,39 +227,22 @@ def method_linear(night, day, denoise_h=10):
     return out
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 # Method 6: Regional stretch (sky + building segmentation)
-# G&W §9.2 (morphological ops) + §10.3 (thresholding/spatial priors)
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def method_regional(night, day, sky_frac=0.45, denoise_h=10):
     """
     Region-aware affine stretch using a soft sky/building segmentation mask.
-
-    Sky mask construction (G&W §10.3, §9.2):
-      1. Compute gradient magnitude via Sobel operators (G&W §10.2).
-      2. Spatial prior: top sky_frac of image rows weighted as sky.
-      3. Exclude bright pixels (light sources) via morphological dilation
-         of a threshold mask — prevents streetlights contaminating sky stats.
-      4. Smooth with Gaussian blur to create a soft blending weight.
-
-    Per-region affine stretch:
-      - Sky pixels stretched using sky-region statistics only
-      - Building pixels stretched using lower-region statistics only
-      - Prevents warm building lighting from contaminating sky color estimate
-
-    Reference: G&W §9.2 "Erosion and Dilation" (morphological mask cleanup);
-               §10.3 "Thresholding" (light source detection);
-               §3.3 "Local Histogram Processing" (region-specific stretch).
     """
     H, W = night.shape[:2]
     gray = cv2.cvtColor(night, cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
 
-    # Light source mask: bright pixels, dilated (G&W §9.2)
+    # Light source mask: bright pixels, dilated
     light = (gray > 0.4).astype(np.float32)
     light = cv2.dilate(light, np.ones((5,5)))
 
-    # Gradient magnitude (G&W §10.2 Sobel)
+    # Gradient magnitude (Sobel)
     gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0)
     gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1)
     grad = cv2.GaussianBlur(np.sqrt(gx**2 + gy**2), (0,0), 20)
@@ -378,29 +280,13 @@ def method_regional(night, day, sky_frac=0.45, denoise_h=10):
     return out
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 # Method 7: Polynomial tone-curve correction
-# G&W §3.2 — Piecewise-Linear and Nonlinear Transformations
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def method_poly(night, day, degree=3, denoise_h=10):
     """
     Per-channel polynomial tone-curve fitted on sorted pixel pairs.
-
-    Sorts both images by intensity, samples 30k pairs, fits a degree-d
-    polynomial f_c such that f_c(night_c) ≈ day_c. Equivalent to a smooth
-    nonlinear intensity mapping (G&W §3.2, nonlinear transformations).
-
-    The polynomial is fitted on SORTED values (not per-pixel), so it estimates
-    the intensity-transfer function while ignoring spatial correspondence
-    (since night and day pixels at the same location are uncorrelated, r²<0.004).
-
-    Known failure: for high-degree polynomials on near-zero inputs the
-    Vandermonde matrix is ill-conditioned (numpy RankWarning), causing the
-    R channel to collapse (std drops from 48 to <10). Use degree≤2 for stability.
-
-    Reference: G&W §3.2 "Some Basic Intensity Transformation Functions",
-               piecewise-linear and polynomial mappings.
     """
     result = np.zeros_like(night, dtype=np.float32)
     for c in range(3):
@@ -421,27 +307,13 @@ def method_poly(night, day, degree=3, denoise_h=10):
     return out
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 # Method 8: Histogram matching (specification)
-# G&W §3.3 — Histogram Matching (Specification)
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def method_hist_match(night, day, denoise_h=5):
     """
     Histogram specification: map night's histogram to match day's histogram.
-
-    For each channel c, compute the CDFs of both night and day, then find
-    the mapping T such that the CDF of T(night_c) equals the CDF of day_c
-    (G&W §3.3, Eq. 3-27 to 3-33). This is the globally optimal histogram
-    transformation that matches the marginal distribution of each channel.
-
-    Note: histogram matching corrects global tonal and color distribution but
-    ignores spatial layout. Since night/day pixels at the same location are
-    uncorrelated (r²<0.004), this is near-optimal for a purely pointwise method.
-    The theoretical MSE floor for any pointwise estimator is σ²_day ≈ 2466.
-
-    Reference: G&W §3.3, "Histogram Matching (Specification)", equations
-               3-27 through 3-33 (CDF-based mapping).
     """
     from skimage.exposure import match_histograms
     out = np.zeros_like(night)
@@ -454,9 +326,9 @@ def method_hist_match(night, day, denoise_h=5):
     return out
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 # Dispatch table
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 METHODS = {
     'wiener':     method_wiener,
@@ -470,9 +342,9 @@ METHODS = {
 }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 # Main
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def build_parser():
     p = argparse.ArgumentParser(
@@ -589,18 +461,8 @@ def main():
 
     if args.compare:
         # ── Run all methods ────────────────────────────────────────────────
-        print(f"{'Method':<12}  {'MSE':>7}  {'SSIM':>6}  {'Δ%':>8}  {'G&W ref'}")
-        print("─" * 65)
-        references = {
-            'wiener':     '§5.8',
-            'gamma':      '§3.2',
-            'clahe':      '§3.3',
-            'retinex':    '§3.4/Land77',
-            'linear':     '§3.2',
-            'regional':   '§9.2+§10.3',
-            'poly':       '§3.2',
-            'hist_match': '§3.3',
-        }
+        print(f"{'Method':<12}  {'MSE':>7}  {'SSIM':>6}  {'Δ%':>8}")
+        print("─" * 50)
         results = []
         for name in METHODS:
             try:
@@ -611,10 +473,10 @@ def main():
                 results.append((name, avg, s, pct))
                 out_path = f"enhanced_{name}.png"
                 cv2.imwrite(out_path, out)
-                print(f"{name:<12}  {avg:>7.1f}  {s:>6.4f}  {pct:>+7.1f}%  {references[name]}")
+                print(f"{name:<12}  {avg:>7.1f}  {s:>6.4f}  {pct:>+7.1f}%")
             except Exception as e:
                 print(f"{name:<12}  ERROR: {e}")
-        print("─" * 65)
+        print("─" * 50)
         best = min(results, key=lambda x: x[1])
         print(f"\nBest: {best[0]} (MSE={best[1]:.1f}, SSIM={best[2]:.4f})")
 

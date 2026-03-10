@@ -10,13 +10,13 @@ A classical image processing pipeline for transforming night-time urban imagery 
 
 ```bash
 # Best method (Wiener, default settings)
-python enhance.py night.png day.png
+python enhance.py images/night.jpg images/day.jpg
 
 # Run all methods and print comparison table
-python enhance.py night.png day.png --compare
+python enhance.py images/night.jpg images/day.jpg --compare
 
 # Save output to a specific path
-python enhance.py night.png day.png --method wiener --output result.png
+python enhance.py images/night.jpg images/day.jpg --method wiener --output result.png
 ```
 
 ---
