@@ -24,7 +24,7 @@ python enhance.py night.png day.png --method wiener --output result.png
 ## Methods
 
 | Method | MSE | SSIM | Δ% | 
-|--------|-----|------|----|---------|
+|--------|-----|------|----|
 | `wiener` ⭐ | **79.8** | **0.870** | **+99.1%** |
 | `poly` | 2442.2 | 0.588 | +73.0% | 
 | `regional` | 2593.7 | 0.541 | +71.3% | 
