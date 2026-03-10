@@ -23,16 +23,16 @@ python enhance.py night.png day.png --method wiener --output result.png
 
 ## Methods
 
-| Method | MSE | SSIM | Δ% | G&W Ref |
+| Method | MSE | SSIM | Δ% | 
 |--------|-----|------|----|---------|
-| `wiener` ⭐ | **79.8** | **0.870** | **+99.1%** | §5.8 |
-| `poly` | 2442.2 | 0.588 | +73.0% | §3.2 |
-| `regional` | 2593.7 | 0.541 | +71.3% | §9.2+§10.3 |
-| `linear` | 3473.9 | 0.503 | +61.5% | §3.2 |
-| `gamma` | 3763.6 | 0.314 | +58.3% | §3.2 |
-| `hist_match` | 4307.9 | 0.118 | +52.3% | §3.3 |
-| `retinex` | 5848.4 | 0.136 | +35.3% | §3.4 |
-| `clahe` | 6888.9 | 0.225 | +23.7% | §3.3 |
+| `wiener` ⭐ | **79.8** | **0.870** | **+99.1%** |
+| `poly` | 2442.2 | 0.588 | +73.0% | 
+| `regional` | 2593.7 | 0.541 | +71.3% | 
+| `linear` | 3473.9 | 0.503 | +61.5% | 
+| `gamma` | 3763.6 | 0.314 | +58.3% | 
+| `hist_match` | 4307.9 | 0.118 | +52.3% | 
+| `retinex` | 5848.4 | 0.136 | +35.3% | 
+| `clahe` | 6888.9 | 0.225 | +23.7% | 
 | Baseline | 9018.6 | 0.160 | — | — |
 
 > **Why does Wiener win so decisively?** Per-channel Pearson r² between night and day pixels is < 0.004 — near-zero correlation. This creates a hard theoretical MSE floor of ~2466 for *any* pointwise method (gamma, poly, histogram, etc.). The Wiener grid breaks through by computing separate MMSE-optimal parameters for each of 737×256 spatial tiles rather than applying a global function to every pixel. See the report for the full proof.
@@ -124,7 +124,6 @@ pip install opencv-python numpy scikit-image
 ```
 enhance.py          # CLI tool -- all 8 methods, --compare flag
 report.pdf          # 7-page technical report with proofs and full ablation
-report.tex          # LaTeX source
 presentation.pptx   # 12-slide presentation deck
 speaker_script.md   # Full narration script for 10-minute recorded video
 ```
