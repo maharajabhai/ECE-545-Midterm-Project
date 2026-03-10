@@ -235,7 +235,7 @@ def method_retinex(night, day, sigmas=(15, 80, 250), denoise_h=8):
     to reduce the grey-world desaturation artifact.
 
     Known failure mode on near-black images: when I≈0, log(I)→-∞ causing
-    numerical explosion in dark regions. We add a small offset (1.0) before
+    numerical explosion in dark regions. I add a small offset (1.0) before
     taking logs to prevent this, but this biases the estimate in dark areas.
 
     Reference: G&W §3.4 (Gaussian filtering as illumination estimator);
